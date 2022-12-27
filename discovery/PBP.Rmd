@@ -1,0 +1,67 @@
+---
+title: "PBP Scrape"
+author: "Zach Austin"
+date: '2022-12-27'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+rm(list=ls())
+
+```
+
+```{r}
+
+require(hoopR)
+require(tidyverse)
+
+```
+
+```{r}
+
+lake_path = file.path("C:/Users/zacha/OneDrive/Documents/GitHub/mbb-data-lake/raw")
+seasons = 2006:2022
+
+for(season in seasons){
+  tictoc::tic()
+  progressr::with_progress({
+    temp <- hoopR::load_mbb_pbp(seasons=season)
+  })
+  tictoc::toc()
+  #write.csv(temp,file.path(lake_path,"pbp",paste0("pbp_",season,'.csv')),row.names = F)
+  
+}
+
+
+```
+```{r}
+
+L = list()
+
+for(season in seasons){
+  temp = read.csv(file.path(lake_path,"pbp",paste0("pbp_",season,'.csv'))) %>% 
+    select(game_id,away_team_name,home_team_name,away_team_id,home_team_id,
+           game_spread,home_favorite,game_spread_available) %>% 
+    unique() %>% 
+    mutate(SEASON = season) %>% 
+    mutate(game_spread = ifelse(game_spread_available,game_spread,NA),
+           home_favorite = ifelse(game_spread_available,home_favorite,NA))
+  
+  L[[season-2005]] = temp
+}
+
+```
+
+```{r}
+
+info = bind_rows(L)
+
+#write.csv(info,file.path(lake_path,"info",paste0('game_info.csv')),row.names = F)
+
+```
+
