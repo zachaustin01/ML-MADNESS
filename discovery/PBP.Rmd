@@ -45,14 +45,17 @@ L = list()
 
 for(season in seasons){
   temp = read.csv(file.path(lake_path,"pbp",paste0("pbp_",season,'.csv'))) %>% 
+    group_by(game_id) %>% 
+    filter(sequence_number == max(sequence_number))
     select(game_id,away_team_name,home_team_name,away_team_id,home_team_id,
-           game_spread,home_favorite,game_spread_available) %>% 
-    unique() %>% 
+       away_score,home_score,
+       game_spread,home_favorite,game_spread_available) %>% 
     mutate(SEASON = season) %>% 
     mutate(game_spread = ifelse(game_spread_available,game_spread,NA),
            home_favorite = ifelse(game_spread_available,home_favorite,NA))
   
   L[[season-2005]] = temp
+  print(season)
 }
 
 ```

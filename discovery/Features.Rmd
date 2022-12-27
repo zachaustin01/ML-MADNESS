@@ -1,0 +1,123 @@
+---
+title: "Feature Development"
+author: "Zach Austin"
+date: '2022-12-27'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+rm(list=ls())
+
+```
+
+```{r}
+
+project_name = "ML-MADNESS"
+
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+repo_path = file.path(substr(getwd(),0,gregexpr(pattern = project_name ,
+                                                getwd())[[1]][1]-2),
+                      project_name)
+
+source(file.path(repo_path,
+                 'objects',
+                 'load_directories.r'),
+       local = knitr::knit_global())
+
+p <- c("tidyverse","zoo",
+       "lubridate",
+       "ggplot2","ggdark",
+       "caTools","rminer","ROCR",
+       "hydroGOF","e1071","xgboost",
+       "OptimalCutpoints","caret",
+       "parallel")
+
+load_all_packages(p)
+
+```
+
+```{r}
+
+boxscores = read.csv(file.path(data_path,"raw","box","bs_ALL.csv"))
+
+```
+
+```{r}
+
+
+team_off_data = boxscores %>% 
+  select(team_id,team_display_name,
+         game_id,game_date,
+         field_goals_made_field_goals_attempted,three_point_field_goals_made_three_point_field_goals_attempted,
+         free_throws_made_free_throws_attempted,offensive_rebounds,defensive_rebounds,
+         assists,steals,blocks,turnovers,team_turnovers,total_turnovers,technical_fouls,
+         flagrant_fouls,fouls,largest_lead,
+         home_away,
+         opponent_id) %>% 
+  arrange(desc(game_date)) %>% # Fix home_away
+  mutate(home_away = ifelse(home_away=="HOME","AWAY","HOME")) %>% 
+  separate(col=field_goals_made_field_goals_attempted,
+           into = c("FGM","FGA"),sep="-") %>% 
+  separate(col=three_point_field_goals_made_three_point_field_goals_attempted,
+           into = c("FG3M","FG3A"),sep="-") %>% 
+  separate(col=free_throws_made_free_throws_attempted,
+           into = c("FTM","FTA"),sep="-") %>% 
+  mutate(FGM = as.numeric(FGM),
+         FGA = as.numeric(FGA),
+         FTM = as.numeric(FTM),
+         FTA = as.numeric(FTA),
+         FG3M = as.numeric(FG3M),
+         FG3A = as.numeric(FG3A)) %>% 
+  mutate(PTS = 2 * FGM + 1 * FG3M + 1 * FTM)
+
+# Note *.x refers to team, *.y refers to (team allowed)
+all_team_data = team_off_data %>% 
+  left_join(team_off_data,by=c("opponent_id"="team_id","game_id","game_date")) %>% 
+  mutate(winning_margin = PTS.x - PTS.y,
+         game_total = PTS.x + PTS.y) %>% 
+  mutate(game_date = as.Date(game_date)) %>% 
+  mutate(SEASON = ifelse(month(as.POSIXlt(game_date, format="Y-m-d"))>5,
+                         year(as.POSIXlt(game_date, format="Y-m-d"))+1,
+                         year(as.POSIXlt(game_date, format="Y-m-d")))) %>% 
+  # Identify appearance number
+  group_by(SEASON,team_id) %>% 
+  arrange(SEASON,team_id,game_date) %>% 
+  mutate(APPEARANCE = row_number())
+  
+
+
+```
+
+```{r}
+
+# Some cleanup
+
+# Extract team ID and name
+
+team_info = all_team_data %>%
+  ungroup() %>% 
+  select(team_id,team_display_name.x) %>% 
+  group_by(team_id,team_display_name.x) %>% 
+  summarize(APPEARANCES = n()) %>% 
+  rename("team_name" = "team_display_name.x") %>% 
+  arrange(desc(APPEARANCES))
+
+```
+
+# Feature Design
+
+
+
+
+```{r}
+
+
+
+```
+

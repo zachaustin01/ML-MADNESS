@@ -1,0 +1,53 @@
+---
+title: "BS"
+author: "Zach Austin"
+date: '2022-12-27'
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+
+rm(list=ls())
+
+```
+
+```{r}
+
+require(httr)
+require(progressr)
+require(tidyverse)
+
+```
+
+
+```{r}
+
+lake_path = file.path("C:/Users/zacha/OneDrive/Documents/GitHub/mbb-data-lake")
+info = read.csv(file.path(lake_path,"raw","info","game_info.csv"))
+
+
+```
+
+```{r}
+
+seasons = 2006:2023
+
+for(season in seasons){
+  tictoc::tic()
+  progressr::with_progress({
+    box = load_mbb_team_box(season=season) %>% 
+      select(-team_uid)
+  })
+  write.csv(box,file.path(lake_path,"raw","box",paste0("bs_",season,'.csv')),row.names = F,fileEncoding = "UTF-8")
+  tictoc::toc()
+  
+}
+
+
+```
+
+
