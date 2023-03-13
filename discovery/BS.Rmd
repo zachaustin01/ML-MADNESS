@@ -28,6 +28,7 @@ require(tidyverse)
 
 lake_path = file.path("C:/Users/zacha/OneDrive/Documents/GitHub/mbb-data-lake")
 info = read.csv(file.path(lake_path,"raw","info","game_info.csv"))
+require(hoopR)
 
 
 ```

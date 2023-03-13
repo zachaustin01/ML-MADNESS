@@ -33,7 +33,7 @@ for(season in seasons){
     temp <- hoopR::load_mbb_pbp(seasons=season)
   })
   tictoc::toc()
-  #write.csv(temp,file.path(lake_path,"pbp",paste0("pbp_",season,'.csv')),row.names = F)
+  write.csv(temp,file.path(lake_path,"pbp",paste0("pbp_",season,'.csv')),row.names = F)
   
 }
 
@@ -43,10 +43,11 @@ for(season in seasons){
 
 L = list()
 
+require(tidyverse)
 for(season in seasons){
   temp = read.csv(file.path(lake_path,"pbp",paste0("pbp_",season,'.csv'))) %>% 
     group_by(game_id) %>% 
-    filter(sequence_number == max(sequence_number))
+    filter(sequence_number == max(sequence_number)) %>% 
     select(game_id,away_team_name,home_team_name,away_team_id,home_team_id,
        away_score,home_score,
        game_spread,home_favorite,game_spread_available) %>% 
@@ -64,7 +65,7 @@ for(season in seasons){
 
 info = bind_rows(L)
 
-#write.csv(info,file.path(lake_path,"info",paste0('game_info.csv')),row.names = F)
+write.csv(info,file.path(lake_path,"info",paste0('game_info.csv')),row.names = F)
 
 ```
 
