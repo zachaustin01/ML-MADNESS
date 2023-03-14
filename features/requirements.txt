@@ -1,2 +1,6 @@
 tidyverse
 hoopR
+httr
+progressr
+memoise
+lubridate
