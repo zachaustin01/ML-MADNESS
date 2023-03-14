@@ -66,8 +66,6 @@ train_test_upload_s3 <- function(
     repo_path = '/home/ec2-user/SageMaker/NFL-machine-learning'
 
 ){
-    model_dataset = model_dataset %>%
-        filter(!(season==2016 & week==1))
     
     # Note: Sagemaker XGBoost requires response column to be the first variable when training
     model_dataset = model_dataset %>%
