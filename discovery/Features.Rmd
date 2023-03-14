@@ -224,9 +224,9 @@ calculate_relative_elo <- function(team_data_refined,
 }
 
 df = calculate_relative_elo(team_data_refined = team_data_refined,
-                            feature = "PTS.x",
+                            features = "PTS.x",
                             season = 2022,
-                            rename_f = "PTS_SCORED")
+                            rename_fs = "PTS_SCORED")
 
 
 ```
