@@ -1,0 +1,302 @@
+---
+title: "Madness"
+author: "Zach Austin"
+date: "2023-03-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+require(tidyverse)
+require(hoopR)
+require(zoo)
+
+```
+
+```{r}
+
+rm(list=ls())
+```
+
+```{r}
+
+seas = 2006:2023 %>% setdiff(.,2020)
+
+df = load_mbb_team_box(seasons = seas) %>% 
+  select(season,game_date,game_id,team_id,team_short_display_name,
+         opponent_id,
+         field_goals_made_field_goals_attempted,
+         three_point_field_goals_made_three_point_field_goals_attempted,
+         free_throws_made_free_throws_attempted,
+         total_rebounds,offensive_rebounds,
+         defensive_rebounds,assists,steals,blocks,
+         total_turnovers,fouls,largest_lead)
+summary(df$game_date)
+
+```
+
+
+```{r}
+
+team_off_data = df %>% 
+  select(season,team_id,team_short_display_name,
+         game_id,game_date,
+         field_goals_made_field_goals_attempted,three_point_field_goals_made_three_point_field_goals_attempted,
+         free_throws_made_free_throws_attempted,offensive_rebounds,defensive_rebounds,
+         assists,steals,blocks,total_turnovers,
+         fouls,largest_lead,
+         opponent_id) %>% 
+  arrange(desc(game_date)) %>% # Fix home_away
+  separate(col=field_goals_made_field_goals_attempted,
+           into = c("FGM","FGA"),sep="-") %>% 
+  separate(col=three_point_field_goals_made_three_point_field_goals_attempted,
+           into = c("FG3M","FG3A"),sep="-") %>% 
+  separate(col=free_throws_made_free_throws_attempted,
+           into = c("FTM","FTA"),sep="-") %>% 
+  mutate(opponent_id = as.character(opponent_id),
+          FGM = as.numeric(FGM),
+         FGA = as.numeric(FGA),
+         FTM = as.numeric(FTM),
+         FTA = as.numeric(FTA),
+         FG3M = as.numeric(FG3M),
+         FG3A = as.numeric(FG3A),
+         offensive_rebounds = as.numeric(offensive_rebounds),
+         defensive_rebounds = as.numeric(defensive_rebounds),
+         assists = as.numeric(assists),
+         steals = as.numeric(steals),
+         blocks = as.numeric(blocks),
+         total_turnovers = as.numeric(total_turnovers),
+         fouls = as.numeric(fouls),
+         largest_lead = as.numeric(largest_lead)) %>% 
+  mutate(PTS = 2 * FGM + 1 * FG3M + 1 * FTM)
+rm(df)
+
+counting_variables = c("PTS","FGM","FGA","FG3M","FG3A","FTM","FTA","offensive_rebounds","defensive_rebounds","assists","steals","blocks","total_turnovers","fouls","largest_lead")
+team_variables = c("season","game_date","game_id","team_id","team_short_display_name","opponent_id")
+
+# At this point in the season, how was a team performing
+# Variables represent up to that game (including that game!)
+rolling_appearances = 10 # Will be filtering to march games for training / testing, so no NA's coerced
+
+gdf = team_off_data %>% 
+  group_by(season,team_id) %>% 
+  arrange(season,team_id,game_date) %>% 
+  mutate(PTS_TEAM_ROLLING = lag(rollapply(PTS,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FGM_TEAM_ROLLING = lag(rollapply(FGM,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FGA_TEAM_ROLLING = lag(rollapply(FGA,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FG3M_TEAM_ROLLING = lag(rollapply(FG3M,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FG3A_TEAM_ROLLING = lag(rollapply(FG3A,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FTM_TEAM_ROLLING = lag(rollapply(FTM,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FTA_TEAM_ROLLING = lag(rollapply(FTA,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,offensive_rebounds_TEAM_ROLLING = lag(rollapply(offensive_rebounds,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,defensive_rebounds_TEAM_ROLLING = lag(rollapply(defensive_rebounds,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,assists_TEAM_ROLLING = lag(rollapply(assists,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,steals_TEAM_ROLLING = lag(rollapply(steals,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,blocks_TEAM_ROLLING = lag(rollapply(blocks,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,total_turnovers_TEAM_ROLLING = lag(rollapply(total_turnovers,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,fouls_TEAM_ROLLING = lag(rollapply(fouls,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,largest_lead_TEAM_ROLLING = lag(rollapply(largest_lead,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))) %>% 
+  group_by(season,opponent_id) %>% 
+  arrange(season,opponent_id,game_date) %>% 
+  mutate(PTS_TEAM_OPPONENTS_ROLLING = lag(rollapply(PTS,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+          ,FGM_TEAM_OPPONENTS_ROLLING = lag(rollapply(FGM,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FGA_TEAM_OPPONENTS_ROLLING = lag(rollapply(FGA,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FG3M_TEAM_OPPONENTS_ROLLING = lag(rollapply(FG3M,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FG3A_TEAM_OPPONENTS_ROLLING = lag(rollapply(FG3A,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FTM_TEAM_OPPONENTS_ROLLING = lag(rollapply(FTM,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,FTA_TEAM_OPPONENTS_ROLLING = lag(rollapply(FTA,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,offensive_rebounds_TEAM_OPPONENTS_ROLLING = lag(rollapply(offensive_rebounds,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,defensive_rebounds_TEAM_OPPONENTS_ROLLING = lag(rollapply(defensive_rebounds,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,assists_TEAM_OPPONENTS_ROLLING = lag(rollapply(assists,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,steals_TEAM_OPPONENTS_ROLLING = lag(rollapply(steals,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,blocks_TEAM_OPPONENTS_ROLLING = lag(rollapply(blocks,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,total_turnovers_TEAM_OPPONENTS_ROLLING = lag(rollapply(total_turnovers,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,fouls_TEAM_OPPONENTS_ROLLING = lag(rollapply(fouls,width = rolling_appearances,FUN=mean,align = 'right',fill=NA))
+        ,largest_lead_TEAM_OPPONENTS_ROLLING = lag(rollapply(largest_lead,width = rolling_appearances,FUN=mean,align = 'right',fill=NA)))
+  
+stats = gdf %>% select(-all_of(counting_variables)) %>% 
+  arrange(season,team_id,game_date)
+
+head(stats,12)
+
+```
+
+
+```{r}
+
+# years.vec = (2003:2022) %>% setdiff(., 2020)
+# start.dates.vec = as.Date(c('2003-03-18','2004-03-16', '2005-03-15', '2006-03-14', '2007-03-13', '2008-03-18', '2009-03-17', '2010-03-16', '2011-03-15', '2012-03-13', '2013-03-19', '2014-03-18', '2015-03-17', '2016-03-15', '2017-03-14', '2018-03-13', '2019-03-19', '2021-03-18', '2022-03-13'))
+  
+
+years.vec = seas
+min_date = as.Date(c('2005-03-15', '2006-03-14', '2007-03-13', '2008-03-18', '2009-03-17', '2010-03-16', '2011-03-15', '2012-03-13', '2013-03-19', '2014-03-18', '2015-03-17', '2016-03-15', '2017-03-14', '2018-03-13', '2019-03-19', '2021-03-18', '2022-03-13'))
+
+rip.df = data.frame(years.vec, min_date)
+
+final_df = team_off_data %>% select(all_of(team_variables)) %>% 
+  left_join(rip.df,by=c("season"="years.vec")) %>% 
+  left_join(team_off_data %>% 
+              select(season,team_id,game_id,PTS),by=c("season","game_id","team_id")) %>% 
+  left_join(team_off_data %>% 
+              select(season,team_id,game_id,PTS),by=c("season","game_id","opponent_id"="team_id")) %>% 
+  rename("PTS"="PTS.x",
+         "PTS_ALLOWED"="PTS.y") %>% 
+  mutate(WIN = ifelse(PTS > PTS_ALLOWED,1,0)) %>% 
+  left_join(stats,by=c("season","team_id","team_short_display_name","game_id","game_date","opponent_id")) %>% 
+  left_join(stats,by=c("season","game_id","game_date","opponent_id"="team_id"))
+
+
+```
+
+
+```{r}
+
+set.seed(2)
+
+# Train only on prior march madness games
+modeling = final_df %>% 
+  filter(min_date <= game_date)
+
+predictors = c(
+      #"season"
+      #,"game_date"
+      #,"game_id"
+      #,"team_id"
+      #,"team_short_display_name.x"
+      #,"opponent_id"
+      #,"min_date"
+      #,"PTS"
+      #,"PTS_ALLOWED"
+      #,"WIN"
+      "PTS_TEAM_ROLLING.x"
+      ,"FGM_TEAM_ROLLING.x"
+      ,"FGA_TEAM_ROLLING.x"
+      ,"FG3M_TEAM_ROLLING.x"
+      ,"FG3A_TEAM_ROLLING.x"
+      ,"FTM_TEAM_ROLLING.x"
+      ,"FTA_TEAM_ROLLING.x"
+      ,"offensive_rebounds_TEAM_ROLLING.x"
+      ,"defensive_rebounds_TEAM_ROLLING.x"
+      ,"assists_TEAM_ROLLING.x"
+      ,"steals_TEAM_ROLLING.x"
+      ,"blocks_TEAM_ROLLING.x"
+      ,"total_turnovers_TEAM_ROLLING.x"
+      ,"fouls_TEAM_ROLLING.x"
+      ,"largest_lead_TEAM_ROLLING.x"
+      ,"PTS_TEAM_OPPONENTS_ROLLING.x"
+      ,"FGM_TEAM_OPPONENTS_ROLLING.x"
+      ,"FGA_TEAM_OPPONENTS_ROLLING.x"
+      ,"FG3M_TEAM_OPPONENTS_ROLLING.x"
+      ,"FG3A_TEAM_OPPONENTS_ROLLING.x"
+      ,"FTM_TEAM_OPPONENTS_ROLLING.x"
+      ,"FTA_TEAM_OPPONENTS_ROLLING.x"
+      ,"offensive_rebounds_TEAM_OPPONENTS_ROLLING.x"
+      ,"defensive_rebounds_TEAM_OPPONENTS_ROLLING.x"
+      ,"assists_TEAM_OPPONENTS_ROLLING.x"
+      ,"steals_TEAM_OPPONENTS_ROLLING.x"
+      ,"blocks_TEAM_OPPONENTS_ROLLING.x"
+      ,"total_turnovers_TEAM_OPPONENTS_ROLLING.x"
+      ,"fouls_TEAM_OPPONENTS_ROLLING.x"
+      ,"largest_lead_TEAM_OPPONENTS_ROLLING.x"
+      ,"team_short_display_name.y"
+      ,"opponent_id.y"
+      ,"PTS_TEAM_ROLLING.y"
+      ,"FGM_TEAM_ROLLING.y"
+      ,"FGA_TEAM_ROLLING.y"
+      ,"FG3M_TEAM_ROLLING.y"
+      ,"FG3A_TEAM_ROLLING.y"
+      ,"FTM_TEAM_ROLLING.y"
+      ,"FTA_TEAM_ROLLING.y"
+      ,"offensive_rebounds_TEAM_ROLLING.y"
+      ,"defensive_rebounds_TEAM_ROLLING.y"
+      ,"assists_TEAM_ROLLING.y"
+      ,"steals_TEAM_ROLLING.y"
+      ,"blocks_TEAM_ROLLING.y"
+      ,"total_turnovers_TEAM_ROLLING.y"
+      ,"fouls_TEAM_ROLLING.y"
+      ,"largest_lead_TEAM_ROLLING.y"
+      ,"PTS_TEAM_OPPONENTS_ROLLING.y"
+      ,"FGM_TEAM_OPPONENTS_ROLLING.y"
+      ,"FGA_TEAM_OPPONENTS_ROLLING.y"
+      ,"FG3M_TEAM_OPPONENTS_ROLLING.y"
+      ,"FG3A_TEAM_OPPONENTS_ROLLING.y"
+      ,"FTM_TEAM_OPPONENTS_ROLLING.y"
+      ,"FTA_TEAM_OPPONENTS_ROLLING.y"
+      ,"offensive_rebounds_TEAM_OPPONENTS_ROLLING.y"
+      ,"defensive_rebounds_TEAM_OPPONENTS_ROLLING.y"
+      ,"assists_TEAM_OPPONENTS_ROLLING.y"
+      ,"steals_TEAM_OPPONENTS_ROLLING.y"
+      ,"blocks_TEAM_OPPONENTS_ROLLING.y"
+      ,"total_turnovers_TEAM_OPPONENTS_ROLLING.y"
+      ,"fouls_TEAM_OPPONENTS_ROLLING.y"
+      ,"largest_lead_TEAM_OPPONENTS_ROLLING.y"
+)
+
+sample = sample.split(modeling$home_win, SplitRatio = .8)
+train_data = subset(modeling, sample == TRUE)
+test_data  = subset(modeling, sample == FALSE)
+
+train_d_predictors <- train_data %>%
+  select(predictors)
+tst_d_predictors<- test_data %>%
+  select(predictors)
+
+dtrain <- xgb.DMatrix(data = as.matrix(train_d_predictors),
+                      label = as.numeric(train_data$home_win))
+# Create test matrix
+dtest <- xgb.DMatrix(data = as.matrix(tst_d_predictors),
+                     label = as.numeric(test_data$home_win))
+
+bst <- xgboost(data = dtrain, # Set training data
+
+               eta =  .01, # Set learning rate
+               nrounds =150, # Set number of rounds
+               early_stopping_rounds = 40, # Set number of rounds to stop at if there is no improvement
+
+               verbose = 1, # 1 - Prints out fit
+               nthread = 3, # Set number of parallel threads
+               print_every_n = 20, # Prints out result every 20th iteration
+
+               objective = "binary:logistic", # Set objective
+               eval_metric = "error",
+               eval_metric = "auc")
+
+boost_preds <- predict(bst, dtest) # Create predictions for XGBoost model
+
+res = data.frame(boost_preds,test_data)
+
+oc <- optimal.cutpoints(X = "boost_preds",
+               status = "home_win",
+               tag.healthy = 0,
+               data = res,
+               methods = "MaxEfficiency")
+
+boost_pred_class <- rep(0, length(boost_preds))
+boost_pred_class[boost_preds >= 
+                   oc$MaxEfficiency$Global$optimal.cutoff$cutoff[1]] <- 1
+
+t <- table(boost_pred_class, test_data$home_win) # Create table
+
+cm <- confusionMatrix(t, positive = "1") # Produce confusion matrix
+
+cm
+
+
+```
+
+```{r}
+
+imp_mat <- xgb.importance(model = bst)
+# Plot importance (top 10 variables)
+xgb.plot.importance(imp_mat, top_n = 10)
+
+```
+
+
+
+
+
