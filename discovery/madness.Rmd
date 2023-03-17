@@ -159,7 +159,8 @@ set.seed(2)
 
 # Train only on prior march madness games
 modeling = final_df %>% 
-  filter(min_date <= game_date)
+  filter(as.character(min_date) <= as.character(game_date))
+
 
 predictors = c(
       #"season"
@@ -202,8 +203,8 @@ predictors = c(
       ,"total_turnovers_TEAM_OPPONENTS_ROLLING.x"
       ,"fouls_TEAM_OPPONENTS_ROLLING.x"
       ,"largest_lead_TEAM_OPPONENTS_ROLLING.x"
-      ,"team_short_display_name.y"
-      ,"opponent_id.y"
+      #,"team_short_display_name.y"
+      #,"opponent_id.y"
       ,"PTS_TEAM_ROLLING.y"
       ,"FGM_TEAM_ROLLING.y"
       ,"FGA_TEAM_ROLLING.y"
@@ -236,25 +237,25 @@ predictors = c(
       ,"largest_lead_TEAM_OPPONENTS_ROLLING.y"
 )
 
-sample = sample.split(modeling$home_win, SplitRatio = .8)
+sample = sample.split(modeling$WIN, SplitRatio = .8)
 train_data = subset(modeling, sample == TRUE)
 test_data  = subset(modeling, sample == FALSE)
 
 train_d_predictors <- train_data %>%
-  select(predictors)
+  select(all_of(predictors))
 tst_d_predictors<- test_data %>%
-  select(predictors)
+  select(all_of(predictors))
 
 dtrain <- xgb.DMatrix(data = as.matrix(train_d_predictors),
-                      label = as.numeric(train_data$home_win))
+                      label = as.numeric(train_data$WIN))
 # Create test matrix
 dtest <- xgb.DMatrix(data = as.matrix(tst_d_predictors),
-                     label = as.numeric(test_data$home_win))
+                     label = as.numeric(test_data$WIN))
 
 bst <- xgboost(data = dtrain, # Set training data
 
-               eta =  .01, # Set learning rate
-               nrounds =150, # Set number of rounds
+               eta =  .05, # Set learning rate
+               nrounds =500, # Set number of rounds
                early_stopping_rounds = 40, # Set number of rounds to stop at if there is no improvement
 
                verbose = 1, # 1 - Prints out fit
@@ -267,24 +268,21 @@ bst <- xgboost(data = dtrain, # Set training data
 
 boost_preds <- predict(bst, dtest) # Create predictions for XGBoost model
 
-res = data.frame(boost_preds,test_data)
+#write.csv(modeling,'modeling.csv',row.names = F)
+xgb.save(bst,'model2.model')
 
-oc <- optimal.cutpoints(X = "boost_preds",
-               status = "home_win",
-               tag.healthy = 0,
-               data = res,
-               methods = "MaxEfficiency")
+res = data.frame(boost_preds,test_data)
 
 boost_pred_class <- rep(0, length(boost_preds))
 boost_pred_class[boost_preds >= 
-                   oc$MaxEfficiency$Global$optimal.cutoff$cutoff[1]] <- 1
+                  0.5] <- 1
 
-t <- table(boost_pred_class, test_data$home_win) # Create table
+t <- table(boost_pred_class, test_data$WIN) # Create table
 
 cm <- confusionMatrix(t, positive = "1") # Produce confusion matrix
 
 cm
-
+(8802 + 4427) / (8802 + 4427 + 10291 + 14665)
 
 ```
 
@@ -296,7 +294,115 @@ xgb.plot.importance(imp_mat, top_n = 10)
 
 ```
 
+# Run on bracket
 
+```{r}
+
+bracket = read.csv('bracket - Sheet1.csv')
+bracket[49,'team_name'] = "Kansas"
+
+save_bracket = bracket
+
+```
+
+```{r}
+
+probabilities_by_seeds = cbind.data.frame(
+  seed = c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16),
+  r1 = c(.99,.93,.85,.79,.64,.61,.60,48.6,51.4,39.2,38.5,25.8,20.9,14.9,6.8,0),
+  r2 = c()
+)
+
+```
+
+
+```{r}
+
+rounds = 1:6
+games = 1:63
+
+# Round 1
+r1 = cbind.data.frame(game_id = c(1:32)) %>% 
+  left_join(bracket %>% select(team_name,round1),by=c("game_id"="round1")) %>% 
+  group_by(game_id) %>% 
+  filter(row_number()==1) %>% 
+  left_join(bracket %>% select(team_name,round1),by=c("game_id"="round1")) %>% 
+  filter(team_name.x!=team_name.y) %>% 
+  left_join(stats %>% 
+              group_by(team_id) %>% 
+              arrange(team_id,desc(game_date)) %>% 
+              filter(row_number()==1),by=c("team_name.x"="team_short_display_name")) %>% 
+  left_join(stats %>% 
+              group_by(team_id) %>% 
+              arrange(team_id,desc(game_date)) %>% 
+              filter(row_number()==1),by=c("team_name.y"="team_short_display_name"))
+test_data = r1
+test_data$WIN = rep(0,nrow(test_data))
+tst_d_predictors<- test_data %>%
+  select(all_of(predictors))
+# Create test matrix
+dtest <- xgb.DMatrix(data = as.matrix(tst_d_predictors),
+                     label = as.numeric(test_data$WIN))
+model_1_preds <- predict(xgb.load('model1.model'), dtest) # Create predictions for XGBoost model
+model_2_preds <- predict(xgb.load('model2.model'), dtest) # Create predictions for XGBoost model
+res = data.frame(model_1_preds,model_2_preds,test_data) %>% 
+  select(model_1_preds,model_2_preds,team_name.x,team_name.y)
+res
+
+bracket = read.csv('bracket - r2.csv')
+r1 = cbind.data.frame(game_id = c(33:48)) %>% 
+  left_join(bracket %>% select(team_name,round2),by=c("game_id"="round2")) %>% 
+  group_by(game_id) %>% 
+  filter(row_number()==1) %>% 
+  left_join(bracket %>% select(team_name,round2),by=c("game_id"="round2")) %>% 
+  filter(team_name.x!=team_name.y) %>% 
+  left_join(stats %>% 
+              group_by(team_id) %>% 
+              arrange(team_id,desc(game_date)) %>% 
+              filter(row_number()==1),by=c("team_name.x"="team_short_display_name")) %>% 
+  left_join(stats %>% 
+              group_by(team_id) %>% 
+              arrange(team_id,desc(game_date)) %>% 
+              filter(row_number()==1),by=c("team_name.y"="team_short_display_name"))
+test_data = r1
+test_data$WIN = rep(0,nrow(test_data))
+tst_d_predictors<- test_data %>%
+  select(all_of(predictors))
+# Create test matrix
+dtest <- xgb.DMatrix(data = as.matrix(tst_d_predictors),
+                     label = as.numeric(test_data$WIN))
+model_1_preds <- predict(xgb.load('model1.model'), dtest) # Create predictions for XGBoost model
+model_2_preds <- predict(xgb.load('model2.model'), dtest) # Create predictions for XGBoost model
+res = data.frame(model_1_preds,model_2_preds,test_data) %>% 
+  select(model_1_preds,model_2_preds,team_name.x,team_name.y)
+res
+
+
+r1 = cbind.data.frame(team_name.x = c("Arizona"),team_name.y=c("Gonzaga")) %>% left_join(stats %>% 
+              group_by(team_id) %>% 
+              arrange(team_id,desc(game_date)) %>% 
+              filter(row_number()==1),by=c("team_name.x"="team_short_display_name")) %>% 
+  left_join(stats %>% 
+              group_by(team_id) %>% 
+              arrange(team_id,desc(game_date)) %>% 
+              filter(row_number()==1),by=c("team_name.y"="team_short_display_name"))
+test_data = r1
+test_data$WIN = rep(0,nrow(test_data))
+tst_d_predictors<- test_data %>%
+  select(all_of(predictors))
+# Create test matrix
+dtest <- xgb.DMatrix(data = as.matrix(tst_d_predictors),
+                     label = as.numeric(test_data$WIN))
+model_1_preds <- predict(xgb.load('model1.model'), dtest) # Create predictions for XGBoost model
+model_2_preds <- predict(xgb.load('model2.model'), dtest) # Create predictions for XGBoost model
+res = data.frame(model_1_preds,model_2_preds,test_data) %>% 
+  select(model_1_preds,model_2_preds,team_name.x,team_name.y)
+res
+
+
+
+
+```
 
 
 
